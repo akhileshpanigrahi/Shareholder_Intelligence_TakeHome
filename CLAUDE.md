@@ -308,11 +308,135 @@ The decision doc should cover:
 - `src/clean_data.py`: Data cleaning script that removes duplicates and fixes data quality issues
 - `src/load_data.py`: Idempotent loader for all 5 core CSV files (reads from clean_data/)
 - `src/create_holder_mapping.py`: Fuzzy matching to create holder_filer_mapping table
+- `src/dashboard.py`: Streamlit Monday morning dashboard (600+ lines)
+- `src/queries/dashboard_queries.py`: Query wrapper class for dashboard data loading
+- `src/utils/formatting.py`: Number/date formatters (Python 3.9+ compatible)
+- `src/utils/colors.py`: Color scheme constants for dashboard
+- `src/pdf/generator.py`: ReportLab PDF generator for executive summaries
 - `queries/`: SQL queries and decision documentation for 6 assignment questions
+- `queries/dashboard_top_movers.sql`: Dashboard-specific query for top 5 weekly movers
 - `EDA/`: Exploratory analysis notebooks
 - `data/`: Original raw CSV files (read-only)
 - `clean_data/`: Cleaned CSV files created by clean_data.py and used by load_data.py
 - `northwind.db`: SQLite database created by load_data.py
+- `MONDAY_SCREEN_SUMMARY.md`: Complete dashboard documentation with alert rules
+
+## Dashboard Architecture
+
+### Running the Dashboard
+
+```bash
+# Launch Monday morning dashboard
+streamlit run src/dashboard.py
+```
+
+Dashboard opens at `http://localhost:8501`
+
+### Dashboard Sections (Priority Order)
+
+**1. Watch List Alerts (FIRST - Priority 1)**
+- Critical governance alerts requiring immediate board attention
+- Color-coded badges: RED (13G→13D), ORANGE (10%), YELLOW (5%)
+- Full alert table with filing lag indicators
+- Download: Watch list CSV (June 1 - August 31, 2026)
+
+**2. Weekly Activity Pulse (SECOND - Priority 2)**
+- Summary by holder type (institutions, individuals, insiders)
+- Top 5 most active individual holders
+- GREEN highlighting for net buyers, RED for net sellers
+- Download: Weekly activity CSV (transaction-level detail)
+
+**3. Top 10 Shareholders (THIRD - Priority 3)**
+- Reconciled positions (register + SEC using MAX logic)
+- Percentage of company owned
+- Reconciliation status indicators
+- Data quality validation panel
+
+**4. System Limitations (Collapsible Footer)**
+- Plain language explanation of what we can/cannot see
+- Reconciliation methodology (MAX not SUM)
+- Data freshness indicators
+
+### Dashboard Data Loading Pattern
+
+The dashboard uses a two-level caching strategy:
+
+```python
+@st.cache_resource
+def get_query_executor():
+    """Database connection (persistent across reruns)."""
+    return DashboardQueries()
+
+@st.cache_data(ttl=300)  # 5-minute cache
+def load_dashboard_data():
+    """Load all dashboard data from database."""
+    queries = get_query_executor()
+    return {
+        'alert_summary': queries.get_alert_summary(),
+        'watch_list': queries.get_watch_list(),
+        'weekly_activity': queries.get_weekly_activity(),
+        'top_movers': queries.get_top_movers(),
+        'top_holders': queries.get_top_holders(),
+        'shares_outstanding': queries.get_shares_outstanding_validation()
+    }
+```
+
+### Color Scheme (src/utils/colors.py)
+
+```python
+# Alert severity colors
+CRITICAL_RED = "#D32F2F"      # 13G→13D conversions
+WARNING_ORANGE = "#F57C00"    # 10% threshold crossings
+WARNING_YELLOW = "#FFA000"    # 5% threshold crossings
+
+# Position change colors
+BUYER_GREEN = "#388E3C"       # Net buyers
+SELLER_RED = "#E53935"        # Net sellers
+```
+
+### Pandas Styling Pattern
+
+When styling Streamlit dataframes, ensure the styling function returns the correct number of style values:
+
+```python
+def style_watch_row(row):
+    """Style row based on alert type (returns N color values for N columns)."""
+    alert_type = row['Alert Type']
+    if '13D' in alert_type:
+        bg_color = CRITICAL_RED
+        text_color = 'white'
+    elif '10%' in alert_type:
+        bg_color = WARNING_ORANGE
+        text_color = 'white'
+    elif '5%' in alert_type:
+        bg_color = WARNING_YELLOW
+        text_color = 'black'
+    else:
+        return [''] * len(row)
+
+    return [f'background-color: {bg_color}; color: {text_color}; font-weight: bold'] * len(row)
+
+styled_df = display_df.style.apply(style_watch_row, axis=1)
+st.dataframe(styled_df, width="stretch")
+```
+
+### Python 3.9 Compatibility
+
+Use `Union` type hints instead of `|` operator (PEP 604 is Python 3.10+):
+
+```python
+from typing import Union, Optional
+
+# Correct for Python 3.9+
+def format_shares(shares: Union[int, float, None]) -> str:
+    if shares is None:
+        return "—"
+    return f"{int(shares):,}"
+
+# WRONG - requires Python 3.10+
+def format_shares(shares: int | float | None) -> str:
+    ...
+```
 
 ## Implementation Status
 
@@ -326,8 +450,9 @@ The decision doc should cover:
 - ✅ Query 4: Watch list (threshold crossings + 13G→13D changes) (queries/query4_watch_list.sql + query4_decisions.md)
 - ✅ Query 5: Sable Point temporal comparison (queries/query5_sable_point_temporal.sql + query5_decisions.md)
 - ✅ Query 6: Shares outstanding reconciliation (queries/query6_shares_outstanding.sql + query6_decisions.md)
+- ✅ Monday screen dashboard (src/dashboard.py + MONDAY_SCREEN_SUMMARY.md)
+- ✅ PDF executive summary generator (src/pdf/generator.py)
 
 **Pending:**
-- Monday screen dashboard (Streamlit or similar)
 - Data freshness documentation
 - Fault list compilation

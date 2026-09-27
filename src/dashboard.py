@@ -37,6 +37,7 @@ from src.utils.colors import (
     SELLER_RED,
     get_alert_background
 )
+from src.pdf.generator import generate_executive_pdf
 
 # Page configuration
 st.set_page_config(
@@ -177,10 +178,20 @@ def main():
         def style_watch_row(row):
             """Style row based on alert type (returns 7 color values for 7 columns)."""
             alert_type = row['Alert Type']
-            bg_color = get_alert_background(alert_type)
-            if bg_color:
-                return [f'background-color: {bg_color}'] * len(row)
-            return [''] * len(row)
+            # Use actual badge colors (not light tints)
+            if '13D' in alert_type:
+                bg_color = CRITICAL_RED
+                text_color = 'white'
+            elif '10%' in alert_type:
+                bg_color = WARNING_ORANGE
+                text_color = 'white'
+            elif '5%' in alert_type:
+                bg_color = WARNING_YELLOW
+                text_color = 'black'
+            else:
+                return [''] * len(row)
+
+            return [f'background-color: {bg_color}; color: {text_color}; font-weight: bold'] * len(row)
 
         styled_watch = display_df.style.apply(style_watch_row, axis=1)
 
@@ -335,7 +346,45 @@ def main():
         st.info("No holder data available.")
 
     # ================================
-    # SECTION 5: DATA QUALITY STATUS
+    # SECTION 5: DOWNLOADS
+    # ================================
+    st.markdown("---")
+    st.header("📥 Downloads")
+    st.caption("Export data for board packages and further analysis")
+
+    col_pdf, col_info = st.columns([1, 2])
+
+    with col_pdf:
+        # Generate and offer PDF download
+        try:
+            pdf_bytes = generate_executive_pdf(
+                data['watch_list'],
+                data['weekly_activity'],
+                data['top_holders'],
+                data['alert_summary']
+            )
+            st.download_button(
+                label="📄 Download Executive Summary PDF",
+                data=pdf_bytes,
+                file_name=f"northwind_executive_summary_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                key="download_pdf",
+                help="One-page board report with alerts, weekly activity, and top holders"
+            )
+        except Exception as e:
+            st.error(f"PDF generation error: {str(e)}")
+            st.caption("Note: Ensure reportlab is installed: `pip install reportlab`")
+
+    with col_info:
+        st.info("""
+        **Available Downloads:**
+        - **Watch List CSV** (in Alerts section): All threshold crossings and form changes
+        - **Weekly Activity CSV** (in Activity section): Transaction-level detail for Aug 24-28
+        - **Executive Summary PDF** (above): One-page board report ready to present
+        """)
+
+    # ================================
+    # SECTION 6: DATA QUALITY STATUS
     # ================================
     st.markdown("---")
     st.header("✅ Data Quality Status")
@@ -364,7 +413,7 @@ def main():
             """)
 
     # ======================================
-    # SECTION 6: SYSTEM LIMITATIONS (Footer)
+    # SECTION 7: SYSTEM LIMITATIONS (Footer)
     # ======================================
     with st.expander("ℹ️ System Limitations - What We Know and Don't Know"):
         st.markdown("""
