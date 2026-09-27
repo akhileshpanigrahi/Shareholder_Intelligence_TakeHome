@@ -41,6 +41,9 @@ This dual-timestamp pattern is critical for:
 ### Known Data Quality Issues
 
 The synthetic data intentionally contains real-world faults:
+- **Duplicate records** (cleaned by src/clean_data.py):
+  - register_events.csv: Duplicate event_id E1040
+  - beneficial_filings.csv: Duplicate accession_no 0002233445-26-000077
 - Late-recorded reversals (recorded_at after effective_date)
 - Name variations across systems (e.g., "Ridgeline Capital Partners LP" vs "L.P.")
 - Holder type changes (individual → insider)
@@ -55,10 +58,15 @@ The synthetic data intentionally contains real-world faults:
 # Activate virtual environment
 source .venv/bin/activate
 
-# Load data into SQLite (idempotent - creates schema and loads all CSVs)
+# Step 1: Clean raw data (removes duplicates, fixes data quality issues)
+# Reads from data/ and writes to clean_data/
+python src/clean_data.py
+
+# Step 2: Load cleaned data into SQLite (idempotent - creates schema and loads all CSVs)
+# Reads from clean_data/
 python src/load_data.py
 
-# Create holder-filer mapping (fuzzy matching between register and SEC)
+# Step 3: Create holder-filer mapping (fuzzy matching between register and SEC)
 python src/create_holder_mapping.py
 
 # Verify database structure
@@ -297,12 +305,13 @@ The decision doc should cover:
 ## Code Organization
 
 - `src/schema.sql`: Table definitions with comprehensive comments
-- `src/load_data.py`: Idempotent loader for all 5 core CSV files
+- `src/clean_data.py`: Data cleaning script that removes duplicates and fixes data quality issues
+- `src/load_data.py`: Idempotent loader for all 5 core CSV files (reads from clean_data/)
 - `src/create_holder_mapping.py`: Fuzzy matching to create holder_filer_mapping table
 - `queries/`: SQL queries and decision documentation for 6 assignment questions
 - `EDA/`: Exploratory analysis notebooks
 - `data/`: Original raw CSV files (read-only)
-- `clean_data/`: Cleaned CSV files used by loaders (includes holder_filer_mapping.csv)
+- `clean_data/`: Cleaned CSV files created by clean_data.py and used by load_data.py
 - `northwind.db`: SQLite database created by load_data.py
 
 ## Implementation Status
