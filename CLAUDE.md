@@ -230,6 +230,42 @@ The decision doc should cover:
   - Only "Mismatch: Register exceeds SEC" requires immediate CFO attention
   - 0.01% tolerance for rounding differences
 
+**Query 4 - Watch List:**
+- **Chronological Comparison Pattern:**
+  - Use `LAG()` window function partitioned by filer_cik, ordered by event_date, filing_date
+  - Compare each filing to the previous filing chronologically (not amendment chains)
+  - Rationale: Detects actual position changes over time
+- **First Filing Treatment:**
+  - Treat first filings as crossing from 0% if they're ≥5% or ≥10%
+  - Example: New filer at 8% triggers both "Crossed above 5%" and "Crossed above 10%"
+- **Multiple Threshold Alerts:**
+  - Show all thresholds crossed in a single position change
+  - If 4% to 11%, show two separate rows: "Crossed above 5%" and "Crossed above 10%"
+  - Use separate CTEs for each alert type, combine with UNION ALL
+- **Form Type Pattern Matching:**
+  - Use `LIKE '%13G%'` and `LIKE '%13D%'` (NOT `'13G%'` / `'13D%'`)
+  - Form types in database are "SC 13G", "SC 13D" with "SC " prefix
+  - Critical for detecting passive-to-activist conversions (highest priority CFO alert)
+
+**Query 5 - Sable Point Temporal Comparison:**
+- **Event Type-Based Reversal Filtering:**
+  - **Critical**: Changed from exclusion pattern to event_type filtering for partial reversals
+  - "Then" view: `AND re.event_type != 'reversal'` (exclude reversal events we didn't know about yet)
+  - "Now" view: Include ALL events (transfers and reversals), let natural netting occur
+  - Rationale: Exclusion pattern loses unreverted portion of partial reversals
+- **Partial Reversal Handling:**
+  - Example: Original transfer +1,650,000, partial reversal -400,000
+  - Exclusion pattern would exclude entire +1,650,000, losing the +1,250,000 unreverted portion
+  - Event type + natural netting: +1,650,000 - 400,000 = +1,250,000 (correct!)
+- **"Today" Definition:**
+  - Assume "today" = September 1, 2026 for queries requiring current knowledge
+  - Use `recorded_at <= '2026-09-01 23:59:59'` as current knowledge cutoff
+  - Rationale: All register events and reversals through Aug 31 are recorded by Sept 1
+- **Temporal Perspective Comparison:**
+  - Same effective date (July 31), two knowledge dates (July 31 vs Sept 1)
+  - Shows how late-recorded events change historical positions retroactively
+  - Key CFO insight: Decisions made on historical data may be based on incomplete information
+
 ## Deliverables Structure
 
 1. **Schema + Loader**: SQL tables and idempotent data loading script
@@ -258,10 +294,10 @@ The decision doc should cover:
 - ✅ Query 1: Top holders with reconciliation (queries/query1_top_holders.sql + query1_decisions.md)
 - ✅ Query 2: Weekly buy/sell activity by holder type (queries/query2_weekly_activity.sql + query2_decisions.md)
 - ✅ Query 3: Percent ownership reconciliation (queries/query3_percent_reconciliation.sql + query3_decisions.md)
+- ✅ Query 4: Watch list (threshold crossings + 13G→13D changes) (queries/query4_watch_list.sql + query4_decisions.md)
+- ✅ Query 5: Sable Point temporal comparison (queries/query5_sable_point_temporal.sql + query5_decisions.md)
 
 **Pending:**
-- Query 4: Watch list (threshold crossings + 13G→13D changes)
-- Query 5: Sable Point temporal comparison (then vs now)
 - Query 6: Shares outstanding reconciliation
 - Monday screen dashboard (Streamlit or similar)
 - Data freshness documentation
