@@ -185,21 +185,50 @@ The decision doc should cover:
 - Any assumptions about data or run date
 - Edge cases and how they're treated
 
-### Key Learnings from Query 1 Implementation
+### Key Learnings from Completed Queries
 
-**System View vs Actual Position:**
-- For "what the CFO knew on Aug 31", use `recorded_at` (register) and `filing_date` (SEC)
-- For "actual position on Aug 31", use `effective_date` (register) and `event_date` (SEC)
-- Late-recorded reversals affect system view differently than actual position
+**Query 1 - Top Holders:**
+- **System View vs Actual Position:**
+  - For "what the CFO knew on Aug 31", use `recorded_at` (register) and `filing_date` (SEC)
+  - For "actual position on Aug 31", use `effective_date` (register) and `event_date` (SEC)
+  - Late-recorded reversals affect system view differently than actual position
+- **Holder Version Resolution:**
+  - Use latest holder version: `WHERE version = (SELECT MAX(version) FROM holders WHERE holder_id = ?)`
+  - Critical for fuzzy matching (name changes like "Holdings LLC" → "Office LLC")
+- **Unmapped SEC Filers:**
+  - Some SEC filers have no holder_id (e.g., Vantage Quant Strategies)
+  - These are beneficial owners behind CEDE with no direct register presence
+  - Include them with register_shares = 0, sec_shares from filing
 
-**Holder Version Resolution:**
-- Use latest holder version: `WHERE version = (SELECT MAX(version) FROM holders WHERE holder_id = ?)`
-- Critical for fuzzy matching (name changes like "Holdings LLC" → "Office LLC")
+**Query 2 - Weekly Activity:**
+- **Option A Consolidation Pattern:**
+  - When holder_type changes during the period, use the type as of report date for ALL transactions
+  - Rationale: CFO wants to know "which current holder types were active"
+  - Example: If H005 changed from "individual" to "insider" on Aug 26, ALL Aug 24-28 transactions count under "insider"
+- **NULL Holder Handling:**
+  - `to_holder_id IS NULL` = share buyback (exclude from shareholder activity)
+  - `from_holder_id IS NULL` = equity issuance (exclude from shareholder activity)
+  - Focus on shareholder-to-shareholder movements only
+- **SQLite UNION Pattern for Aggregation:**
+  - Cannot use FULL OUTER JOIN, use UNION of buyer and seller types
+  - Then LEFT JOIN to combine buys and sells by type
 
-**Unmapped SEC Filers:**
-- Some SEC filers have no holder_id (e.g., Vantage Quant Strategies)
-- These are beneficial owners behind CEDE with no direct register presence
-- Include them with register_shares = 0, sec_shares from filing
+**Query 3 - Percent Reconciliation:**
+- **MAX Logic for Position Calculation:**
+  - `our_shares = MAX(register_shares, shares_reported)` NOT register + SEC
+  - SEC filing already includes direct register holdings, summing would double-count
+  - If register > SEC = ERROR (impossible scenario requiring investigation)
+  - If SEC > register = NORMAL (indirect holdings via CEDE & CO)
+  - If register = SEC = PERFECT (all holdings are direct)
+- **Historical Outstanding Shares:**
+  - For event_dates before first shares_outstanding record, carry earliest available value backwards
+  - Use COALESCE with fallback to handle missing historical data
+  - Document assumption in decision file
+- **Simplified Explanations:**
+  - Focus on Match vs Mismatch with clear reasons
+  - "Match: Indirect holdings via CEDE" is NORMAL and GOOD (most common case)
+  - Only "Mismatch: Register exceeds SEC" requires immediate CFO attention
+  - 0.01% tolerance for rounding differences
 
 ## Deliverables Structure
 
@@ -227,10 +256,10 @@ The decision doc should cover:
 - ✅ Data loader (src/load_data.py)
 - ✅ Holder-filer identity mapping (src/create_holder_mapping.py)
 - ✅ Query 1: Top holders with reconciliation (queries/query1_top_holders.sql + query1_decisions.md)
+- ✅ Query 2: Weekly buy/sell activity by holder type (queries/query2_weekly_activity.sql + query2_decisions.md)
+- ✅ Query 3: Percent ownership reconciliation (queries/query3_percent_reconciliation.sql + query3_decisions.md)
 
 **Pending:**
-- Query 2: Weekly buy/sell activity by holder type (Aug 24-28)
-- Query 3: Percent ownership reconciliation vs reported
 - Query 4: Watch list (threshold crossings + 13G→13D changes)
 - Query 5: Sable Point temporal comparison (then vs now)
 - Query 6: Shares outstanding reconciliation
