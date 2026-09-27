@@ -266,6 +266,26 @@ The decision doc should cover:
   - Shows how late-recorded events change historical positions retroactively
   - Key CFO insight: Decisions made on historical data may be based on incomplete information
 
+**Query 6 - Shares Outstanding Reconciliation:**
+- **NULL Holder Pattern for Corporate Actions:**
+  - `from_holder_id IS NULL` = Equity issuance (new shares created)
+  - `to_holder_id IS NULL` = Share buyback/retirement (shares destroyed)
+  - These transactions change total shares outstanding
+  - All other transactions are shareholder-to-shareholder (no net change to outstanding)
+- **Reconciliation Formula:**
+  - Register Total = Opening Total + Equity Issued - Shares Repurchased
+  - Compare to company-reported shares_outstanding from SEC filings
+  - Perfect match validates register integrity
+- **Date Selection:**
+  - Use available shares_outstanding data points (June 30, Aug 3)
+  - For "August 31" check, use closest available (Aug 3)
+  - Assumes no changes between Aug 3-31 if no register movements
+- **Key Validation:**
+  - Both dates showed zero difference (perfect reconciliation)
+  - Confirms register is complete and accurate
+  - No missing shares or unrecorded movements
+  - Opening positions (May 31) baseline is correct
+
 ## Deliverables Structure
 
 1. **Schema + Loader**: SQL tables and idempotent data loading script
@@ -296,9 +316,9 @@ The decision doc should cover:
 - ✅ Query 3: Percent ownership reconciliation (queries/query3_percent_reconciliation.sql + query3_decisions.md)
 - ✅ Query 4: Watch list (threshold crossings + 13G→13D changes) (queries/query4_watch_list.sql + query4_decisions.md)
 - ✅ Query 5: Sable Point temporal comparison (queries/query5_sable_point_temporal.sql + query5_decisions.md)
+- ✅ Query 6: Shares outstanding reconciliation (queries/query6_shares_outstanding.sql + query6_decisions.md)
 
 **Pending:**
-- Query 6: Shares outstanding reconciliation
 - Monday screen dashboard (Streamlit or similar)
 - Data freshness documentation
 - Fault list compilation
