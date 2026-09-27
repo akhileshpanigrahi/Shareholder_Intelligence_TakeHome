@@ -1,0 +1,15 @@
+holder_id,version,valid_from,holder_name,holder_type,country
+H001,1,2026-01-01,CEDE & CO,nominee,US
+H002,1,2026-01-01,Marisol Vance,individual,US
+H003,1,2026-01-01,Ridgeline Capital Partners LP,institution,US
+H004,1,2026-01-01,Northwind Metals Employee Stock Trust,trust,US
+H005,1,2026-01-01,Tobias Kell,insider,US
+H006,1,2026-01-01,Anouk de Vries,individual,NL
+H007,1,2026-01-01,Halvard Family Holdings LLC,institution,US
+H008,1,2026-01-01,Priya Raghunathan,individual,US
+H009,1,2026-01-01,Bluewater Pension Trust,institution,CA
+H010,1,2026-01-01,Owen Castellanos,individual,US
+H011,1,2026-01-01,Sable Point Advisors LLC,institution,US
+H012,1,2026-01-01,Dmitri Volkov,individual,US
+H010,2,2026-07-15,Owen Castellanos,insider,US
+H007,2,2026-08-03,Halvard Family Office LLC,institution,US
