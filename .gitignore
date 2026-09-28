@@ -1,3 +1,66 @@
+# Python virtual environment
 .venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# macOS
 .DS_Store
 **/.DS_Store
+
+# Database files
+northwind.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Markdown files (exclude all except README.md and ASSIGNMENT.md)
+*.md
+!README.md
+!ASSIGNMENT.md
+
+# Claude Code agent files
+CLAUDE.md
+.claude/
+
+# Temporary files and folders
+temp/
+tmp/
+*.tmp
+.temp/
+
+# Log files
+*.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# pytest cache
+.pytest_cache/
+
+# mypy
+.mypy_cache/

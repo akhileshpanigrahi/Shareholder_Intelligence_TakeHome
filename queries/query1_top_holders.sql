@@ -91,7 +91,7 @@ holder_names AS (
   WHERE h1.version = (SELECT MAX(h2.version) FROM holders h2 WHERE h2.holder_id = h1.holder_id)
 ),
 
--- Get all unique holder_ids
+-- Get all unique holder_ids (including unmapped SEC filers)
 all_holders AS (
   SELECT holder_id FROM register_system_view
   UNION
@@ -100,19 +100,51 @@ all_holders AS (
   SELECT holder_id FROM register_actual
   UNION
   SELECT holder_id FROM sec_actual_by_holder
+  UNION
+  -- Include unmapped SEC filers (beneficial owners with no direct register presence)
+  SELECT 'UNMAPPED_' || filer_cik AS holder_id
+  FROM latest_sec_system
+  WHERE filer_cik NOT IN (SELECT filer_cik FROM holder_filer_mapping)
+  UNION
+  SELECT 'UNMAPPED_' || filer_cik AS holder_id
+  FROM latest_sec_actual
+  WHERE filer_cik NOT IN (SELECT filer_cik FROM holder_filer_mapping)
 ),
 
 -- Combine all sources
 combined AS (
   SELECT
     ah.holder_id,
-    hn.holder_name,
-    hn.holder_type,
-    COALESCE(rsv.register_shares, 0) AS register_shares,
-    COALESCE(ss.sec_shares, 0) AS sec_shares,
+    -- Handle unmapped SEC filers (get name from beneficial_filings)
     CASE
-      WHEN ra.actual_shares IS NOT NULL AND sa.sec_actual_shares IS NOT NULL
-        THEN CASE WHEN ra.actual_shares > sa.sec_actual_shares THEN ra.actual_shares ELSE sa.sec_actual_shares END
+      WHEN ah.holder_id LIKE 'UNMAPPED_%' THEN
+        (SELECT filer_name
+         FROM beneficial_filings
+         WHERE filer_cik = REPLACE(ah.holder_id, 'UNMAPPED_', '')
+         LIMIT 1)
+      ELSE hn.holder_name
+    END AS holder_name,
+    -- Unmapped filers are typically institutions
+    CASE
+      WHEN ah.holder_id LIKE 'UNMAPPED_%' THEN 'institution'
+      ELSE hn.holder_type
+    END AS holder_type,
+    COALESCE(rsv.register_shares, 0) AS register_shares,
+    -- For unmapped filers, get SEC shares from latest_sec_system directly
+    CASE
+      WHEN ah.holder_id LIKE 'UNMAPPED_%' THEN
+        COALESCE((SELECT sec_shares FROM latest_sec_system
+                  WHERE filer_cik = REPLACE(ah.holder_id, 'UNMAPPED_', '')), 0)
+      ELSE COALESCE(ss.sec_shares, 0)
+    END AS sec_shares,
+    -- Best estimate calculation
+    CASE
+      WHEN ah.holder_id LIKE 'UNMAPPED_%' THEN
+        -- Unmapped filers: only have SEC data, no register presence
+        COALESCE((SELECT sec_actual_shares FROM latest_sec_actual
+                  WHERE filer_cik = REPLACE(ah.holder_id, 'UNMAPPED_', '')), 0)
+      WHEN ra.actual_shares IS NOT NULL AND sa.sec_actual_shares IS NOT NULL THEN
+        CASE WHEN ra.actual_shares > sa.sec_actual_shares THEN ra.actual_shares ELSE sa.sec_actual_shares END
       ELSE COALESCE(ra.actual_shares, sa.sec_actual_shares, 0)
     END AS best_estimate
   FROM all_holders ah
