@@ -46,41 +46,74 @@ streamlit run src/dashboard.py
 - **System Limitations (Collapsible):** Plain language explanation of what we can/cannot see
 - **Refresh Button:** Manual data cache refresh
 
-## Three Alert Rules (Half-Page Documentation)
+ ## Three Alert Rules (Half-Page Documentation)
 
 ### ALERT #1: ACTIVIST INTENT DETECTED 🚨 (CRITICAL - RED)
-- **What triggers this alert:** An investor who previously filed as a passive holder (Form 13G) has now filed as an activist investor (Form 13D) for the same Northwind holding
-- **Why it matters:** Schedule 13D filers are permitted to actively seek board representation, push for strategic changes, or initiate takeover activity. This conversion signals a fundamental shift from passive ownership to active engagement with management and governance
-- **Recommended CFO action:**
-  - Contact investor relations immediately to initiate dialogue
-  - Brief the board of directors on the activist's profile and potential intentions
-  - Review existing defensive measures (poison pill, staggered board, etc.)
-  - Prepare response strategy with legal counsel
-- **Time window:** June 1 - August 31, 2026
 
-### ALERT #2: MAJOR THRESHOLD CROSSING ⚠️ (WARNING - ORANGE/YELLOW)
-- **What triggers this alert:** An investor's ownership percentage crossed the 5% or 10% threshold in either direction
-  - **5% threshold:** Triggers mandatory SEC public disclosure (Schedule 13D or 13G filing required)
-  - **10% threshold:** Represents a major ownership position with potential control implications and board influence
-- **Why it matters:**
-  - **Crossing above threshold:** Indicates position building - either a new large investor entering or an existing investor significantly increasing their stake
-  - **Crossing below threshold:** Indicates position reduction - investor exiting or meaningfully reducing exposure to Northwind
-- **Recommended CFO action:**
-  - Monitor for accumulation patterns across multiple transactions
-  - Assess investor profile, investment thesis, and historical activism
-  - Prepare for potential shareholder engagement or dialogue
-  - Brief board on material ownership changes
-- **Time window:** June 1 - August 31, 2026
+**What triggers this alert:**
+- An investor who previously filed as a passive holder (Form 13G) has now filed as an activist investor (Form 13D) for the same Northwind holding
+
+**Rule behind the alert:**
+- Compare current filing's form type to previous filing's form type for the same filer_cik
+- If previous filing contains "13G" AND current filing contains "13D", trigger alert
+- Use event_date from the filing to determine when the change occurred
+- Use filing_date to show when we learned about it
+
+**Why it matters:**
+- Schedule 13D filers are permitted to actively seek board representation, push for strategic changes, or initiate takeover activity
+- This conversion signals a fundamental shift from passive ownership to active engagement with management
+
+**Time window:** June 1 - August 31, 2026
+
+---
+
+### ALERT #2: THRESHOLD CROSSING ⚠️ (WARNING - ORANGE/YELLOW)
+
+**What triggers this alert:**
+- An investor's ownership percentage crossed the 5% or 10% threshold in either direction
+
+**Rule behind the alert:**
+- Calculate ownership percentage: (shares_reported / shares_outstanding) × 100
+- Compare current filing's percentage to previous filing's percentage for the same filer_cik
+- **5% threshold (YELLOW):**
+  - Alert if previous % < 5% AND current % ≥ 5% (crossing above)
+  - Alert if previous % ≥ 5% AND current % < 5% (crossing below)
+- **10% threshold (ORANGE):**
+  - Alert if previous % < 10% AND current % ≥ 10% (crossing above)
+  - Alert if previous % ≥ 10% AND current % < 10% (crossing below)
+- For first filings (no previous filing), treat previous % as 0%
+- Use event_date to determine when the crossing occurred
+- Use filing_date to show when we learned about it
+
+**Why it matters:**
+- **5% threshold:** Triggers mandatory SEC public disclosure requirement
+- **10% threshold:** Represents major ownership position with potential control implications
+- **Crossing above:** Indicates position building (new investor or existing investor increasing stake)
+- **Crossing below:** Indicates position reduction (investor exiting or reducing exposure)
+
+**Time window:** June 1 - August 31, 2026
+
+---
 
 ### ALERT #3: LATE FILING DISCLOSURE ℹ️ (INFORMATIONAL)
-- **What triggers this alert:** An SEC filing was received more than 3 business days after the investor's reported transaction date
-- **Why it matters:** Late filings may indicate administrative issues, complex transaction structures, or attempts to minimize market visibility of trading activity. SEC regulations require Schedule 13D/13G filings within specific timeframes (10 days for initial 13G, 2 business days for material 13D amendments)
-- **Recommended CFO action:**
-  - Document the delay for compliance review
-  - Assess whether the delay appears justified based on transaction complexity
-  - Note the late filing pattern for future credibility assessment of the investor
-  - Consider whether delay suggests coordination issues or intentional obscurity
-- **Display note:** This information appears as a filing lag indicator in the watch list table
+
+**What triggers this alert:**
+- An SEC filing was received more than 3 business days after the investor's reported transaction date
+
+**Rule behind the alert:**
+- Calculate filing lag: filing_date - event_date (in days)
+- If filing lag > 3 business days, flag as late filing
+- Display the lag in the "Lag (days)" column of the watch list table
+
+**Why it matters:**
+- Late filings may indicate administrative issues or complex transaction structures
+- SEC regulations require Schedule 13D/13G filings within specific timeframes:
+  - Initial 13G: 10 days after crossing 5%
+  - 13G amendments: 45 days after calendar year-end
+  - Initial 13D: 10 days after crossing 5%
+  - 13D amendments: 2 business days after material change
+
+**Display note:** This appears as a filing lag indicator in the watch list table, not as a separate alert row
 
 ## System Limitations (Plain Language)
 

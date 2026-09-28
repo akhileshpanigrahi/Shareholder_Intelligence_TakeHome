@@ -178,20 +178,17 @@ def main():
         def style_watch_row(row):
             """Style row based on alert type (returns 7 color values for 7 columns)."""
             alert_type = row['Alert Type']
-            # Use actual badge colors (not light tints)
+            # Use light tint backgrounds
             if '13D' in alert_type:
-                bg_color = CRITICAL_RED
-                text_color = 'white'
+                bg_color = '#FFCDD2'  # Light red
             elif '10%' in alert_type:
-                bg_color = WARNING_ORANGE
-                text_color = 'white'
+                bg_color = '#FFE0B2'  # Light orange
             elif '5%' in alert_type:
-                bg_color = WARNING_YELLOW
-                text_color = 'black'
+                bg_color = '#FFF9C4'  # Light yellow
             else:
                 return [''] * len(row)
 
-            return [f'background-color: {bg_color}; color: {text_color}; font-weight: bold'] * len(row)
+            return [f'background-color: {bg_color}'] * len(row)
 
         styled_watch = display_df.style.apply(style_watch_row, axis=1)
 
