@@ -112,13 +112,20 @@ class DashboardQueries:
             - activist_alerts: Count of 13G→13D conversions
             - threshold_10_alerts: Count of 10% crossings
             - threshold_5_alerts: Count of 5% crossings
+            - late_filing_alerts: Count of filings with lag > 5 days
         """
         watch_list = self.get_watch_list()
+
+        # Calculate filing lag for late filing detection
+        watch_list['filing_lag_days'] = (
+            pd.to_datetime(watch_list['date_learned']) - pd.to_datetime(watch_list['date_happened'])
+        ).dt.days
 
         return {
             'activist_alerts': len(watch_list[watch_list['alert_type'] == 'Changed from 13G to 13D']),
             'threshold_10_alerts': len(watch_list[watch_list['alert_type'].str.contains('10%', na=False)]),
-            'threshold_5_alerts': len(watch_list[watch_list['alert_type'].str.contains('5%', na=False)])
+            'threshold_5_alerts': len(watch_list[watch_list['alert_type'].str.contains('5%', na=False)]),
+            'late_filing_alerts': len(watch_list[watch_list['filing_lag_days'] > 5])
         }
 
     def get_shares_outstanding_validation(self) -> pd.DataFrame:

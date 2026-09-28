@@ -138,13 +138,12 @@ def main():
     # SECTION 2: CRITICAL ALERTS (Priority 1)
     # =======================================
     st.markdown("<br><br>", unsafe_allow_html=True)  # Extra spacing
-    st.markdown('<h1 class="alert-section-header">🚨 WATCH LIST ALERTS - REQUIRES IMMEDIATE REVIEW</h1>', unsafe_allow_html=True)
     st.markdown('<div class="alert-section-box">', unsafe_allow_html=True)
     st.caption("**Critical governance events requiring board attention (June 1 - August 31, 2026)**")
 
     # Alert count badges
     alert_summary = data['alert_summary']
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         activist_count = alert_summary['activist_alerts']
@@ -170,6 +169,15 @@ def main():
             label="🟡 5% Threshold Crossings",
             value=threshold_5_count,
             delta="Medium Priority" if threshold_5_count > 0 else "None",
+            delta_color="off"
+        )
+
+    with col4:
+        late_filing_count = alert_summary['late_filing_alerts']
+        st.metric(
+            label="ℹ️ Late Filings (>5 days)",
+            value=late_filing_count,
+            delta="Informational" if late_filing_count > 0 else "None",
             delta_color="off"
         )
 
@@ -210,7 +218,19 @@ def main():
 
             return [f'background-color: {bg_color}'] * len(row)
 
+        def style_lag_column(val):
+            """Highlight lag column if > 5 days (late filing)."""
+            try:
+                lag = int(val)
+                if lag > 5:
+                    return 'font-weight: bold'
+            except (ValueError, TypeError):
+                pass
+            return ''
+
+        # Apply both row and column styling
         styled_watch = display_df.style.apply(style_watch_row, axis=1)
+        styled_watch = styled_watch.applymap(style_lag_column, subset=['Lag (days)'])
 
         st.dataframe(styled_watch, width="stretch", height=400)
 
