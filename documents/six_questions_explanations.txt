@@ -1,0 +1,352 @@
+-------------------------------------------------------------------------------------
+Q1. Top holders: The ten largest owners of Northwind on 31 August 2026, from both sources together, one line per real owner. Show the shares we hold on the register, the shares reported to the SEC, and your best number for the total.
+Key decision:
+- CEDE is a nominee holding not a real owner. Including CEDE would distort top 10 list
+- Register shares column**: `recorded_at <= '2026-08-31'`
+  - Shows what was in the system on Aug 31
+  - Reflects the data CFO would have seen that day
+- SEC shares column**: `filing_date <= '2026-08-31'`
+  - SEC filings received by Aug 31
+  - System view of reported ownership
+- Best estimate column**: `effective_date` (register) + `event_date` (SEC)
+  - True legal ownership position on Aug 31
+  - Corrects for late-recorded reversals and backdated event
+- Followed `amends_accession_no` to get latest SEC filing per filer
+- Best Estimate Logic - MAX Not SUM
+  - When holder appears in both register AND SEC: `MAX(register, SEC)`
+  - Rationale: SEC filing reports TOTAL beneficial ownership including direct holdings
+  - Example: If Ridgeline has 2.9M direct + SEC reports 4.3M total → 4.3M, not 7.2M
+  - Avoids double-counting shares
+- Identity Reconciliation
+  - Created `holder_filer_mapping` to link holder_id ↔ filer_cik
+  - Handles name variations (e.g., "Halvard Holdings LLC" vs "Halvard Office LLC")
+- Handling Unmapped SEC Filers
+  - Problem: Some SEC filers (e.g., Vantage Quant Strategies, CIK 6677889) have no entry in holder_filer_mapping.csv
+  - Root Cause: These are beneficial owners behind CEDE & CO nominee with no direct register presence
+  - Solution: Create synthetic holder_id using pattern 'UNMAPPED_' + filer_cik
+
+- Run Date Assumption
+  - Query assumes execution on September 1, 2026 00:00
+  - "As of Aug 31" means all data through end of day Aug 31
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+Q2. Last week: Who bought and who sold in the week of 24 to 28 August 2026, by holder type. Same shape as the screen the CFO opens on Monday 31 August.
+Key decision:
+Date Filters
+- Effective date: `BETWEEN '2026-08-24' AND '2026-08-28'`
+  - The week being analyzed (Mon-Fri before the Monday report)
+  - Uses legal transaction date (when it actually happened)
+- Recorded at: `<= '2026-08-31 16:00:00'`
+  - Query runs on Monday Aug 31 at 4 PM after market close
+  - Includes all events known to the system by that time
+  - Late-recorded events from the week are captured
+
+Holder Type Assignment 
+- Use holder_type as of Aug 31 for ALL transactions
+- Rationale: CFO wants to know "which current holder types were active"
+- Example: If H005 changed from "individual" to "insider" on Aug 26:
+  - ALL their Aug 24-28 transactions count under "insider"
+  - Provides clearer picture of current ownership composition
+
+
+Handling NULL Holders (Issuance/Buyback)
+- `to_holder_id IS NULL` → share buyback (company retired shares)
+  - Count only the `from_holder_id` (who sold to company)
+- `from_holder_id IS NULL` → equity issuance (company issued new shares)
+  - Count only the `to_holder_id` (who received new shares)
+
+CEDE & CO Inclusion
+- Included CEDE (H001) in the results
+- Rationale: Material movements to/from CEDE indicate:
+  - Shares moving from direct registration to street name (or vice versa)
+  - CEDE activity is legitimate shareholder movement.
+
+Reversal Handling
+- Excluded all transfers with `reverses_transfer_id IS NOT NULL`
+- Same logic as Query 1: reversals net to zero
+- Example: If T5189 was reversed, exclude the original transfer
+
+Run Context
+- Query execution: Monday, August 31, 2026 at 16:00
+- Analysis period: August 24-28, 2026 (previous trading week)
+- All transactions known to system by Monday 4 PM are included
+
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+Q3.Percent of the company: For every SEC filer, the percent they hold, computed by you. Show it next to the percent they reported. Explain every difference.
+Key Decisions
+
+- Every filing in `beneficial_filings` table is analyzed
+- Includes original 13D/13G and all amendments
+- Rationale:
+  - Shows reconciliation accuracy over time
+
+Date Selection - event_date and effective_date
+- For SEC filings: Use `event_date` (when the ownership position legally existed)
+- For register position calculation**: Use `effective_date <= event_date`
+  - Calculates actual position as it existed on event_date
+- NOT using filing_date or recorded_at: Those show when we learned, not actual position
+
+For each filing's event_date, first compute filer's register position:
+```
+register_shares = opening_position (May 31)
+                + SUM(transfers TO holder WHERE effective_date <= event_date)
+                - SUM(transfers FROM holder WHERE effective_date <= event_date)
+                - (exclude all reversed transfers)
+```
+
+Then apply MAX logic to get our best estimate:
+```
+our_shares = MAX(register_shares, shares_reported)
+```
+Rationale:
+- If register > SEC filing: ERROR - direct holdings can't exceed total beneficial ownership
+- If SEC filing > register: NORMAL - filer has indirect holdings via CEDE & CO
+- If register = SEC filing: PERFECT - all holdings are direct
+
+ Shares Outstanding Lookup
+- For event_dates within data range: Use most recent `shares_outstanding` where `as_of_date <= event_date`
+  - Example: If event_date = 2026-07-15, use shares_outstanding from 2026-06-30
+  - Assumption: Outstanding shares remain constant until next published update
+- For event_dates BEFORE first shares_outstanding record: Use earliest available shares_outstanding
+  - Example: If event_date = 2026-02-12 but first shares_outstanding is 2026-06-30, use 2026-06-30 value
+  - Rationale: We carry the earliest known value backwards for historical filings
+- This is the actual denominator for percentage calculation
+
+Handling Unmapped Filers
+- Some SEC filers have no `holder_id` in `holder_filer_mapping`
+- These are beneficial owners behind CEDE with no direct register position
+- Set `our_shares = 0` for these filers
+- Explanation column: "No register position - beneficial owner behind CEDE"
+
+Reversal Exclusion
+- Exclude all transfers where `reverses_transfer_id IS NOT NULL`
+
+Our Computed Values:
+- `our_shares`: MAX(register_shares, shares_reported) - our best estimate
+- `actual_outstanding`: True shares outstanding on event_date
+- `our_percent`: Our calculation (our_shares / actual_outstanding * 100)
+
+Variance Analysis:
+- `percent_diff`: our_percent - percent_reported
+- `explanation`: Simple Match/Mismatch with reason
+
+Simplified Explanation Logic
+
+The `explanation` column provides clear Match/Mismatch categorization:
+
+| Condition | Explanation | Meaning |
+|-----------|-------------|---------|
+| register = SEC, outstanding correct, % within 0.01% | "Match" | Perfect reconciliation |
+| register > SEC | "Mismatch: Register exceeds SEC filing" | ERROR - impossible scenario |
+| register = SEC, but stale outstanding | "Mismatch: Stale outstanding basis" | Filer used wrong denominator |
+| register < SEC, outstanding correct | "Match: Indirect holdings via CEDE" | Normal - filer has shares behind CEDE |
+| register < SEC, stale outstanding | "Match: Indirect via CEDE, but stale basis" | Normal position, wrong denominator |
+| register = SEC, outstanding correct, minor % diff | "Match: Minor rounding difference" | Calculation precision |
+| Other | "Review needed" | Edge case requiring investigation |
+
+Data Assumptions and Limitations
+
+Shares Outstanding Data Coverage:
+- Our `shares_outstanding` table has limited historical data
+- For filings with event_dates before our data range, we use earliest available value
+
+Register Events Coverage:
+- Opening positions start from 2026-05-31
+- Register events cover 2026-06-01 to 2026-08-31
+- Filings with event_dates before May 31 will show our_shares = 0 (before our data)
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+Q4. Watch list. Every holder who crossed 5% or 10% in either direction between 1 June and 31 August, and every filer who changed from a 13G to a 13D. Give the date, and say whether the date is when it happened or when we learned about it.
+
+## Key Decisions
+
+Date Range - Event Date (When It Happened)
+- Filter: `event_date BETWEEN '2026-06-01' AND '2026-08-31'`
+- `filing_date` shows when we learned about it (may be later)
+- Both dates are shown in output for  transparency
+
+Chronological Comparison Method
+- Compare each filing to the previous filing by event_date** (not amendment chains)
+- Rationale: Detects actual position changes over time
+- Example: If a filer has filings on June 15 (4%), July 10 (6%), Aug 20 (11%), compare each to the prior one chronologically
+
+First Filing Treatment
+- Include first filings as crossings if they're ≥5% or ≥10%
+- Rationale: First disclosure above threshold is actionable information.
+
+Multiple Threshold Alerts**
+- Show all thresholds crossed in a single position change
+- If holder goes from 4% to 11%, show two alerts:
+  - "Crossed above 5%"
+  - "Crossed above 10%"
+- Rationale: CFO needs to know about all significant thresholds crossed
+
+Form Type Change Detection (13G → 13D)
+- Uses pattern matching to catch 13G, 13G/A amendments
+- Indicates change from passive to activist investor
+- Compare to previous chronological filing (not just amendment parent)
+- Rationale: Any 13D following a 13G is a change in intent
+
+Dates 
+- `date_happened`: event_date (when the position/form change legally occurred)
+- `date_learned`: filing_date (when SEC received the form, when we learned about it)
+
+Priority Levels:
+1. Critical: 13G → 13D change (activist intent)
+2. High: Crossed above 10% or below 10% (major position change)
+3. Medium: Crossed above 5% or below 5% (disclosure threshold)
+
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+Q5. Then and now. The register position of Sable Point Advisors on 31 July 2026 as we knew it on 31 July, and as we know it today. Explain the difference.
+Key Decisions
+
+Target Date - July 31, 2026
+- Calculate Sable Point Advisors (H011) register position as of July 31, 2026
+- Compare two perspectives of the SAME date:
+  - "As we knew it on July 31" (system view then)
+  - "As we know it today" (system view now with Sept 1, 2026 knowledge)
+
+Position Calculation 
+
+**Position "as we knew it on July 31, 2026":
+Opening position (May 31)
++ Transfers TO H011 WHERE effective_date <= '2026-07-31'
+                     AND recorded_at <= '2026-07-31 23:59:59'
+                     AND event_type != 'reversal'
+- Transfers FROM H011 WHERE effective_date <= '2026-07-31'
+                       AND recorded_at <= '2026-07-31 23:59:59'
+                       AND event_type != 'reversal'
+
+Position "as we know it today" (Sept 1, 2026):
+
+Opening position (May 31)
++ Transfers TO H011 WHERE effective_date <= '2026-07-31'
+                     AND recorded_at <= '2026-09-01 23:59:59'
+                     -- Include ALL event types (transfer and reversal)
+- Transfers FROM H011 WHERE effective_date <= '2026-07-31'
+                       AND recorded_at <= '2026-09-01 23:59:59'
+                       -- Include ALL event types (transfer and reversal)
+
+
+Reversal Handling - Event Type Based
+
+"As we knew it" view (July 31):
+- This excludes reversal transactions that we knew about by July 31
+- Rationale: On July 31, we only exclude reversals we knew about at that time
+
+"As we know it" view (Sept 1):
+- Include ALL events (both 'transfer' and 'reversal' types)
+- Natural netting occurs: original transfer (+shares) minus reversal (-shares)
+
+*Sable Point Holder Identification*
+- Holder ID: H011
+- Latest holder name: "Sable Point Advisors LLC"
+- Filer CIK: 3344556
+- Opening position (May 31): 0 shares
+
+Sable Point Register Events:
+
+
+Position "as we knew it on July 31, 2026":
+- Opening: 0
+- +2,100,000 (E1180, T5181, recorded July 7, event_type='transfer')  included
+- +1,650,000 (E1181, T5182, recorded July 28, event_type='transfer')  included
+- E1187 reversal excluded (event_type='reversal', recorded Aug 6, after July 31)
+- Total: 3,750,000 shares
+
+Position "as we know it today" (Sept 1, 2026):
+- Opening: 0
+- +2,100,000 (E1180, T5181, recorded July 7, event_type='transfer') included
+- +1,650,000 (E1181, T5182, recorded July 28, event_type='transfer') included
+- -400,000 (E1187, T5188, recorded Aug 6, event_type='reversal') included
+- Total: 0 + 2,100,000 + 1,650,000 - 400,000 = 3,350,000 shares 
+
+Difference: 3,350,000 - 3,750,000 = -400,000 shares
+
+Explanation:
+"Position decreased by 400,000 shares due to late-recorded reversal(s) after July 31"
+
+-------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
+Q6. Does it add up?** Prove, with a query, whether the register total agrees with the company's shares outstanding on 30 June and on 31 August. If it does not, say by how much and why.
+Key Decisions
+
+Dates to Check
+- June 30, 2026: Exact match available in shares_outstanding table
+- August 3, 2026: Closest available to August 31 (no data for Aug 31)
+
+Reconciliation Formula
+```
+Register Total = Opening Total (May 31)
+                + Equity Issued (from_holder_id IS NULL)
+                - Shares Repurchased (to_holder_id IS NULL)
+```
+
+Opening Total Baseline**
+- Use sum of all opening_positions as of May 31, 2026
+- This is 40,482,500 shares total
+
+Equity Issuance Detection**
+- Pattern: `from_holder_id IS NULL`
+- These increase total shares outstanding
+
+**5. Share Buyback/Retirement Detection**
+- Pattern: `to_holder_id IS NULL`
+- These decrease total shares outstanding
+
+Reversal Exclusion
+- Same reversal handling pattern as other queries
+- Ensures we don't count transactions that were later reversed
+
+Variance:
+- `difference`: register_total - reported_outstanding
+- `explanation`: Simple status message
+
+**8. Explanation Logic**
+
+```
+IF ABS(difference) < 0.01:
+  "Perfect reconciliation"
+
+IF register_total > reported_outstanding:
+  "Register exceeds reported by [amount] shares"
+
+IF register_total < reported_outstanding:
+  "Register below reported by [amount] shares"
+```
+
+## Register Movements Found
+
+June 30, 2026:
+- E1191 (T5192): +300,000 shares
+  - `from_holder_id IS NULL` → Equity issuance
+  - `to_holder_id = H004` (Halvard Family Office LLC)
+
+August 3, 2026:
+- E1192 (T5193): -900,000 shares
+  - `from_holder_id = H001` (CEDE & CO)
+  - `to_holder_id IS NULL` → Share buyback/retirement
+
+Reconciliation Results
+
+June 30, 2026
+
+Opening Total (May 31) = 40,482,500
++ Equity Issued = 300,000
+- Shares Repurchased = 0
+Register Total = 40,782,500
+Reported Outstanding = 40,782,500 
+Difference = 0
+Status: Perfect reconciliation
+
+August 3, 2026
+
+Opening Total (May 31) = 40,482,500
++ Equity Issued = 300,000
+- Shares Repurchased = 900,000
+Register Total = 39,882,500
+| Reported Outstanding (8-K) | 39,882,500 |
+| **Difference = 0
+Status: Perfect reconciliation
