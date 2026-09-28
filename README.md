@@ -25,8 +25,19 @@ python src/clean_data.py          # Step 1: Remove duplicates
 python src/load_data.py           # Step 2: Create database
 python src/create_holder_mapping.py  # Step 3: Create holder-filer mapping (REQUIRED)
 
-# 4. Run the Monday morning dashboard
+# 4. Verify setup worked
+sqlite3 northwind.db ".tables"    # Should show: beneficial_filings holders holder_filer_mapping opening_positions register_events shares_outstanding
+sqlite3 northwind.db "SELECT COUNT(*) FROM holder_filer_mapping;"  # Should return: 5
+sqlite3 northwind.db < queries/query1_top_holders.sql | head -5    # Should show top 3 holders
+
+# 5. Run the Monday morning dashboard
 streamlit run src/dashboard.py
+# Expected: Browser opens to http://localhost:8501
+# You should see:
+#   - 0 ACTIVIST INTENT alerts (13G→13D conversions)
+#   - 3 alerts for 10% Threshold Crossings
+#   - 2 alerts for 5% Threshold Crossings
+#   - Top holder: Ridgeline Capital Partners LP with 4,300,000 shares (10.54%)
 ```
 
 **Important:** You MUST run all three data setup scripts before launching the dashboard. The `create_holder_mapping.py` script creates the `holder_filer_mapping` table which is required by the top holders query.

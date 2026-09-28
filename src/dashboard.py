@@ -68,6 +68,25 @@ st.markdown("""
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    /* PRIORITY 1: Make alert section visually dominant */
+    .alert-section-header {
+        font-size: 2.5em !important;
+        font-weight: 800 !important;
+        color: #D32F2F;
+        margin-top: 2em;
+        margin-bottom: 0.5em;
+        padding: 20px;
+        background-color: #FFF3E0;
+        border-left: 10px solid #D32F2F;
+        border-radius: 5px;
+    }
+    .alert-section-box {
+        padding: 30px;
+        background-color: #FFF8F0;
+        border: 3px solid #F57C00;
+        border-radius: 10px;
+        margin-bottom: 40px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,9 +137,10 @@ def main():
     # =======================================
     # SECTION 2: CRITICAL ALERTS (Priority 1)
     # =======================================
-    st.markdown("---")
-    st.header("🚨 Watch List Alerts")
-    st.caption("Critical governance events requiring board attention (June 1 - August 31, 2026)")
+    st.markdown("<br><br>", unsafe_allow_html=True)  # Extra spacing
+    st.markdown('<h1 class="alert-section-header">🚨 WATCH LIST ALERTS - REQUIRES IMMEDIATE REVIEW</h1>', unsafe_allow_html=True)
+    st.markdown('<div class="alert-section-box">', unsafe_allow_html=True)
+    st.caption("**Critical governance events requiring board attention (June 1 - August 31, 2026)**")
 
     # Alert count badges
     alert_summary = data['alert_summary']
@@ -206,9 +226,12 @@ def main():
     else:
         st.info("No threshold crossings or form changes detected in the period.")
 
+    st.markdown('</div>', unsafe_allow_html=True)  # Close alert section box
+
     # ===========================================
     # SECTION 3: WEEKLY PULSE (Priority 2)
     # ===========================================
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("---")
     st.header("📈 Weekly Activity Pulse (Aug 24-28, 2026)")
     st.caption("Share movements during last trading week")
@@ -269,19 +292,8 @@ def main():
                 'Holder Name', 'Type', 'Bought', 'Sold', 'Net Change', 'Activity'
             ]
 
-            # Apply styling - create a helper that returns correct number of columns
-            def style_mover_row(row):
-                """Style row based on activity type (returns 6 color values for 6 columns)."""
-                activity_type = row['Activity']
-                if activity_type == 'buyer':
-                    return [f'background-color: #C8E6C9'] * len(row)  # Light green
-                elif activity_type == 'seller':
-                    return [f'background-color: #FFCDD2'] * len(row)  # Light red
-                return [''] * len(row)
-
-            styled_movers = display_movers.style.apply(style_mover_row, axis=1)
-
-            st.dataframe(styled_movers, width="stretch", hide_index=True)
+            # Display without colors - reserve colors for actionable alerts only
+            st.dataframe(display_movers, width="stretch", hide_index=True)
 
             # Download button
             csv_movers = movers_df.to_csv(index=False)
@@ -341,6 +353,29 @@ def main():
         """)
     else:
         st.info("No holder data available.")
+
+    # ==========================================
+    # SECTION 4.5: CRITICAL LIMITATIONS (Visible)
+    # ==========================================
+    st.markdown("---")
+    st.header("⚠️ Important Data Limitations")
+
+    st.warning("""
+    **What this dashboard CANNOT show:**
+
+    - **~33 million shares held via CEDE & CO broker nominee** - We can only see beneficial owners behind CEDE if they own 5%+ and file with SEC
+    - **Transactions between beneficial owners within CEDE** - These movements are invisible to us
+    - **Holdings below 5%** - No SEC filing requirement, so not tracked
+    """)
+
+    st.error("""
+    **⚠️ Data Quality Alert: Retroactive Changes**
+
+    Register positions may change when late corrections arrive. If you see historical reversals,
+    it means we learned about an error AFTER initially recording a transaction.
+
+    **CFO Action Required:** Always re-generate reports on the day of board presentation to ensure latest corrections are included.
+    """)
 
     # ================================
     # SECTION 5: DOWNLOADS
@@ -410,39 +445,24 @@ def main():
             """)
 
     # ======================================
-    # SECTION 7: SYSTEM LIMITATIONS (Footer)
+    # SECTION 7: ADDITIONAL DETAILS (Footer)
     # ======================================
-    with st.expander("ℹ️ System Limitations - What We Know and Don't Know"):
+    with st.expander("ℹ️ Additional Technical Details"):
         st.markdown("""
         ### What we CAN see:
         - ✅ **All registered shareholders** on Northwind's official share register
         - ✅ **Large owners (5%+ holders)** who file SC 13D/13G with the SEC
         - ✅ **Every share movement** between registered holders since June 1, 2026
 
-        ### What we CANNOT see:
-        - ❌ **Beneficial owners behind CEDE & CO nominee** (~33 million shares)
-            - Only visible if they own 5%+ and file with SEC
-        - ❌ **Transactions between beneficial owners** within the CEDE system
-        - ❌ **Ownership changes not yet filed** with the SEC
-            - SEC filings can arrive days or weeks after actual transactions
-        - ❌ **Register transactions not yet recorded**
-            - Some transactions recorded days after they happen (see "effective_date" vs "recorded_at")
-        - ❌ **Holdings below 5%** (no SEC filing requirement)
+        ### Additional limitations:
+        - ❌ **Ownership changes not yet filed** with the SEC (filings can arrive days or weeks after transactions)
+        - ❌ **Register transactions not yet recorded** (some recorded days after they happen)
         - ❌ **Synthetic positions** (derivatives, swaps, economic exposure)
-
-        ### Important reconciliation note:
-        When a holder appears in BOTH the register and SEC filings, we use the **HIGHER number**
-        (not the sum). The SEC filing already includes their direct register holdings plus any
-        indirect holdings via CEDE & CO. Adding them would count the same shares twice.
 
         ### Data freshness:
         - **Register events:** Updated throughout the trading day
         - **SEC filings:** Imported once daily (overnight batch from EDGAR)
         - **This dashboard:** Shows data as of August 31, 2026, 4:00 PM ET
-
-        If you see a reversal dated in the past, it means we learned about an error AFTER
-        we initially recorded a transaction. The "effective_date" shows when it really
-        happened; "recorded_at" shows when we knew about it.
         """)
 
     # Footer
