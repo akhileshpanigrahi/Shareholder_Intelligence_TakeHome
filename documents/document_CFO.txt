@@ -1,0 +1,22 @@
+ALERT RULES SUMMARY
+
+All alerts cover filings from June 1 to August 31, 2026. "Event Date" is the transaction date reported by the investor. "Filing Date" is when the SEC received the filing.
+
+ALERT 1: ACTIVIST INTENT (CRITICAL)
+Triggers when an investor who last filed a passive Schedule 13G now files an activist Schedule 13D for the same holding.
+Why it matters: A 13D filer may seek board seats or push for strategic change. This signals a shift from passive to active ownership.
+
+ALERT 2: OWNERSHIP THRESHOLD CROSSING (WARNING)
+Triggers when an investor's ownership moves above or below 5% or 10%.
+How we calculate it:
+- Investor shares come from their latest filing.
+- Total shares outstanding come from the latest 10-Q or 8-K on or before the transaction date.
+- Ownership % = investor shares / total shares outstanding. We calculate this ourselves and do not use the investor's reported figure, which may be based on old data.
+- We compare against the investor's prior filing. First-time filers start at 0%. No rounding is used.
+One filing can trigger both the 5% and 10% alerts.
+Why it matters: 5% is the level that requires public disclosure. 10% is a major position with possible control implications. Crossing up suggests a growing stake; crossing down suggests a shrinking one.
+
+ALERT 3: LATE FILING (INFORMATIONAL)
+Triggers when a filing is received more than 5 business days after the transaction date.
+It appears as a lag (in days) in the watch list, not as a separate alert.
+Why it matters: A late filing may point to administrative delays or a complex transaction.
