@@ -61,6 +61,8 @@ The dashboard will open in your browser at `http://localhost:8501`
 │   ├── query2_decisions.md
 │   └── ... (decision docs for all queries)
 ├── northwind.db                   # SQLite database (created by load_data.py)
+├── DATA_FRESHNESS.md              # Engineering guide: keeping dashboard data correct
+├── MONDAY_SCREEN_SUMMARY.md       # Dashboard documentation with alert rules
 └── requirements.txt               # Python dependencies
 ```
 
@@ -234,6 +236,22 @@ WHERE version = (
   WHERE holder_id = ? AND valid_from <= target_date
 )
 ```
+
+## Data Freshness & Integrity
+
+**See [DATA_FRESHNESS.md](DATA_FRESHNESS.md)** for complete engineering guide on maintaining dashboard accuracy.
+
+**Key Topics Covered:**
+- **Data pipeline:** How register changes reach the dashboard (recommended architecture with latencies)
+- **Late reversals:** How backdated corrections affect historical views
+- **"As of" semantics:** What dashboard dates mean (effective_date vs recorded_at)
+- **Staleness detection:** Monitoring, validation checks, and failure modes
+
+**Quick Reference:**
+- Dashboard uses `effective_date` filtering (legal reality, not knowledge cutoff)
+- Late-recorded reversals retroactively correct historical positions
+- Recommended refresh: 5-15 min (register) + 5 min (cache) = ~20 min latency
+- Validation: Query 6 reconciliation must show 0 variance
 
 ## Known Data Quality Issues
 

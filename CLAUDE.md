@@ -320,6 +320,7 @@ The decision doc should cover:
 - `clean_data/`: Cleaned CSV files created by clean_data.py and used by load_data.py
 - `northwind.db`: SQLite database created by load_data.py
 - `MONDAY_SCREEN_SUMMARY.md`: Complete dashboard documentation with alert rules
+- `DATA_FRESHNESS.md`: Engineering guide for maintaining dashboard data accuracy
 
 ## Dashboard Architecture
 
@@ -452,7 +453,7 @@ def format_shares(shares: int | float | None) -> str:
 - ✅ Query 6: Shares outstanding reconciliation (queries/query6_shares_outstanding.sql + query6_decisions.md)
 - ✅ Monday screen dashboard (src/dashboard.py + MONDAY_SCREEN_SUMMARY.md)
 - ✅ PDF executive summary generator (src/pdf/generator.py)
+- ✅ Data freshness documentation (DATA_FRESHNESS.md)
 
 **Pending:**
-- Data freshness documentation
 - Fault list compilation
