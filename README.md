@@ -63,6 +63,8 @@ The dashboard will open in your browser at `http://localhost:8501`
 ├── northwind.db                   # SQLite database (created by load_data.py)
 ├── DATA_FRESHNESS.md              # Engineering guide: keeping dashboard data correct
 ├── MONDAY_SCREEN_SUMMARY.md       # Dashboard documentation with alert rules
+├── FAULT_LIST.md                  # Comprehensive data quality issue list (25 items)
+├── PROMPT_LOG.md                  # Complete chronicle of Claude Code usage (20 prompts)
 └── requirements.txt               # Python dependencies
 ```
 
@@ -255,16 +257,14 @@ WHERE version = (
 
 ## Known Data Quality Issues
 
-The synthetic data intentionally contains real-world faults:
-- **Duplicate records** (cleaned by src/clean_data.py):
-  - register_events.csv: Duplicate event_id E1040
-  - beneficial_filings.csv: Duplicate accession_no 0002233445-26-000077
-- Late-recorded reversals (recorded_at after effective_date)
-- Name variations across systems
-- Holder type changes (individual → insider)
-- Inconsistent shares_outstanding bases in SEC filings
+**See [FAULT_LIST.md](FAULT_LIST.md)** for comprehensive documentation of all 25 data quality issues found.
 
-All are documented in query decision files.
+**Summary:**
+- **2 Data errors (FIXED):** Duplicate event_id E1040 and duplicate accession_no 0002233445-26-000077 - removed by `src/clean_data.py`
+- **12 Expected features:** Name variations, holder changes, temporal lags, partial reversals, filing inconsistencies - handled by schema design and fuzzy matching
+- **11 Validation checks (PASSED):** Referential integrity, temporal ordering, share positivity, percentage calculations
+
+The synthetic data intentionally contains realistic faults to simulate production systems. All data errors have been resolved; expected features are handled through appropriate schema design, fuzzy matching, and query logic.
 
 ## Dependencies
 

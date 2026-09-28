@@ -321,6 +321,8 @@ The decision doc should cover:
 - `northwind.db`: SQLite database created by load_data.py
 - `MONDAY_SCREEN_SUMMARY.md`: Complete dashboard documentation with alert rules
 - `DATA_FRESHNESS.md`: Engineering guide for maintaining dashboard data accuracy
+- `FAULT_LIST.md`: Comprehensive list of all data quality issues found (25 items: 2 fixed, 12 expected, 11 validated)
+- `PROMPT_LOG.md`: Complete chronicle of Claude Code prompts and work completed (5 sessions, 20 major prompts)
 
 ## Dashboard Architecture
 
@@ -455,5 +457,6 @@ def format_shares(shares: int | float | None) -> str:
 - ✅ PDF executive summary generator (src/pdf/generator.py)
 - ✅ Data freshness documentation (DATA_FRESHNESS.md)
 
-**Pending:**
-- Fault list compilation
+- ✅ Fault list compilation (FAULT_LIST.md)
+
+**All deliverables complete.**
