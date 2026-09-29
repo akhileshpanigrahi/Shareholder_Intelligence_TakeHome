@@ -267,10 +267,8 @@ See `documents/fault_details.txt` for complete list of 25 data quality issues (2
 
 SQLite is built into Python (no separate install needed).
 
-**Note:** If you get type hint errors on Python 3.9, the code has been updated to use `Union` types for compatibility.
 
 ---
 
-**Assignment completed by:** [Your Name]
-**Date:** [Date]
-**Time spent:** [Hours]
+**Assignment completed by:** Akhilesh Panigrahi
+**Date:** 29/09/2026
