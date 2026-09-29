@@ -24,6 +24,7 @@ northwind.db
 *.md
 !README.md
 !ASSIGNMENT.md
+!PROMPT_LOG.md
 
 # Claude Code agent files
 CLAUDE.md
