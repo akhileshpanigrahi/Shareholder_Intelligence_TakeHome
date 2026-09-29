@@ -1,0 +1,130 @@
+DATA FRESHNESS AND INTEGRITY GUIDE
+
+CURRENT STATE 
+
+Right now the pipeline runs manually: three scripts (clean_data.py,
+load_data.py, create_holder_mapping.py) are run in sequence by hand to
+load register and filing data into a static SQLite database. The
+dashboard just reads from that database - there is no automated refresh,
+no scheduled job, and no alerting. The sections below describe the target
+design (what "should" happen); today it depends on someone rerunning the
+scripts.
+
+1. HOW A REGISTER CHANGE REACHES THE SCREEN, AND HOW FAST
+
+Register events (register_events.csv) are appended throughout the trading day.
+Load new rows only (skip rows already in the database). Update the holder
+mapping if a new holder_id shows up.
+Time from event appended to CSV to visible on screen: 5-15 minutes.
+
+SEC filings (beneficial_filings.csv) load once a day, overnight from EDGAR.
+Full reload each time, then rebuild the holder mapping.
+Available by 6:30 AM ET.
+
+Screen refreshes from the database every 5 minutes (cache). A manual refresh
+button forces an immediate reload.
+
+How to build it:
+- Register: incremental load -
+  INSERT new events WHERE event_id NOT IN (SELECT event_id FROM
+  register_events). Run continuously or hourly. Add clean_data.py in this
+  path to check for dedup.
+- Filings: full reload each run -
+  DELETE FROM beneficial_filings; INSERT new data. Then rebuild
+  holder_filer_mapping, since new filings can change the fuzzy matches.
+  Schedule for 6:00 AM ET, data ready by 6:30 AM ET.
+- Cache: Streamlit @st.cache_data(ttl=300). Manual refresh button calls
+  st.cache_data.clear().
+
+2. A REVERSAL FOR LAST TUESDAY ARRIVES TODAY - WHAT HAPPENS
+
+Example: event on Aug 26, reversal recorded Sept 1.
+All position numbers use effective_date, not the date it was recorded. The
+reversal cancels out the original event as of Aug 26.
+Result: the Aug 26 position corrects itself automatically. Any report for
+Aug 26 or later, run after Sept 1, will show the corrected number.
+There is no "freeze" of old reports - the screen always shows current legal
+reality, not what we believed on a past date.
+
+How to build it:
+- Position queries filter on effective_date, e.g.
+  WHERE effective_date <= '2026-08-31'.
+- Exclude any transfer that has been reversed:
+  WHERE transfer_id NOT IN
+  (SELECT reverses_transfer_id FROM register_events
+   WHERE reverses_transfer_id IS NOT NULL)
+- The reversal row itself carries the same effective_date as the original
+  event, so it nets out in that date's position automatically - no special
+  backfill job needed.
+
+3. WHAT "AS OF" MEANS ON THE SCREEN
+
+Two different columns answer two different questions for the same date:
+
+- Register Shares / SEC Shares (System View): what we knew on that date.
+  Filter: recorded_at <= date (register), filing_date <= date (SEC filings).
+  A transfer that happened earlier but was recorded late is excluded.
+
+- Best Estimate (Actual Position): the true ownership on that date, using
+  every correction we know today.
+  Filter: effective_date <= date (register), event_date <= date (SEC filings).
+  A transfer that happened earlier but was recorded late is included.
+
+Use System View to answer "what did we know then." Use Best Estimate to
+answer "what actually happened."
+
+How to build it:
+- System View: WHERE recorded_at <= :date (register) and
+  WHERE filing_date <= :date (SEC filings).
+- Best Estimate: WHERE effective_date <= :date (register) and
+  WHERE event_date <= :date (SEC filings).
+- Compute both in the same query/view and display side by side (see Query 1
+  in the existing SQL) rather than as two separate reports, so they can't
+  drift out of sync.
+- For SEC amendments, always take the latest amendment's event_date in
+  chronological order, not the original filing's date.
+
+4. HOW YOU KNOW DATA IS STALE OR A LOAD FAILED
+
+Checks to run automatically (e.g. daily cron at 6:30 AM ET):
+- MAX(recorded_at) in register_events: alert if older than 2 hours during
+  market hours (9:30 AM - 4:00 PM ET).
+- MAX(filing_date) in beneficial_filings: alert if older than yesterday
+  (EDGAR publishes with a 1-day lag).
+- Shares outstanding reconciliation: (opening + issued - buybacks) must
+  equal reported outstanding; alert on any variance.
+- Row counts: new register events > 0 each day; beneficial filings count
+  never decreases.
+
+On screen:
+- "Generated" / "Data as of" timestamp shows when the page last loaded.
+- If that timestamp is far behind the current time, the cache or pipeline
+  is stuck.
+
+Common failures to watch for:
+- Load script fails -> tables empty or unchanged (row count = 0 or stale
+  MAX(recorded_at)).
+- CSV corrupted -> load errors out (loader should catch this and exit
+  with a non-zero code).
+- Holder matching fails -> mapping table empty or too small.
+- Database locked -> connection times out, screen shows an error.
+
+Alerting: send an email/Slack message when any check above fails.
+
+How to build it:
+- Wrap the checks above as SQL/assertions run by a daily cron job
+  (6:30 AM ET, after the filings load):
+    SELECT MAX(recorded_at) FROM register_events;
+    SELECT MAX(filing_date) FROM beneficial_filings;
+    SELECT (opening + equity_issued - buybacks) - reported_outstanding
+      AS variance FROM shares_outstanding_validation;
+  Fail the job (non-zero exit) if any check is out of range, and pipe
+  failures to email/Slack.
+- Add simple assertions after each load step, e.g.
+  assert len(new_events) > 0, "No new register events loaded"
+  assert len(new_filings) >= 0, "Beneficial filings count decreased"
+- On the dashboard, show the last successful load time ("Data as of: ...")
+  pulled from the database, plus a status badge (reconciled vs.
+  discrepancy detected) driven by the validation query above.
+- Log every pipeline run (start/end time, row counts, duration) to a file
+  so failures can be diagnosed after the fact.
