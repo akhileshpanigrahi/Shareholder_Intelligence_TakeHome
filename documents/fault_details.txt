@@ -1,0 +1,35 @@
+DATA QUALITY FAULT LIST
+
+UNEXPECTED FAULTS (DATA ERRORS - FIXED)
+
+1. Duplicate event_id E1040 in register_events.csv - same transaction recorded twice; fixed by dedup in clean_data.py.
+2. Duplicate accession_no 0002233445-26-000077 in beneficial_filings.csv - Bluewater Pension Trust 13G/A filed twice; fixed by dedup in clean_data.py.
+
+EXPECTED FAULTS (REAL-WORLD FEATURES - DOCUMENTED)
+
+3. Filer name variation for CIK 1234567 - "Ridgeline Capital Partners, L.P." vs "Ridgeline Capital Partners LP"; handled by fuzzy matching in create_holder_mapping.py.
+4. Filer name variation for CIK 3344556 - "Sable Point Advisors LLC" vs "Sable Point Advisors, LLC"; handled by fuzzy matching in create_holder_mapping.py.
+5. H007 name change - "Halvard Family Holdings LLC" to "Halvard Family Office LLC" effective 2026-08-03; handled via versioned holders table.
+6. H010 type change - Owen Castellanos reclassified individual to insider effective 2026-07-15; handled via versioned holders table.
+7. Late-recorded reversal E1189 - reversal for transfer T5189 occurred 2026-08-27, recorded 2026-09-02; 5-day gap shows effective_date vs recorded_at.
+8. Partial reversal E1187 - reverses only 400,000 of 1,650,000 shares from transfer T5182 ("broker over-delivered").
+9. SEC filing lags of 7-45 days - filing_date averages 15 days after event_date; normal regulatory delay.
+10. H011 (Sable Point Advisors LLC) opening position = 0 shares - new investor, first position built during Jun-Aug 2026.
+11. NULL holder_id in register_events - NULL from_holder_id (issuance) or to_holder_id (buyback) for corporate actions, not transfers.
+12. Inconsistent outstanding_basis in beneficial_filings - filers use different shares_outstanding denominators (e.g. 40,482,500 vs 40,782,500 vs 39,882,500) even same-day.
+13. Vantage Quant Strategies (CIK 6677889) has no holder_id mapping - beneficial owner behind CEDE & CO nominee, no register presence.
+14. Reversal note field used for explanations - E1187/E1189 carry notes like "partial reversal; broker over-delivered", "duplicate instruction".
+
+VALIDATION RESULTS (NO ISSUES FOUND)
+
+15. Date format consistency - all dates parse as YYYY-MM-DD or YYYY-MM-DD HH:MM:SS across all 5 files.
+16. Temporal ordering in register_events - no case of recorded_at earlier than effective_date.
+17. Temporal ordering in beneficial_filings - no case of filing_date earlier than event_date.
+18. Referential integrity for holder_id - all holder_id values in opening_positions.csv and register_events.csv exist in holders.csv.
+19. Referential integrity for reversals - all reverses_transfer_id values point to an existing transfer_id.
+20. Referential integrity for amendments - all amends_accession_no values point to an existing accession_no.
+21. Share count positivity - all shares and shares_reported values are greater than 0.
+22. Percentage validity - all percent_reported values fall between 0-100%.
+23. Percentage calculation accuracy - reported percentages match shares_reported / outstanding_basis * 100 within 0.01%.
+24. Date range coverage - register_events fully covers 2026-06-01 to 2026-08-31 with no gaps.
+25. Holder version chronology - for H007 and H010, version 2 valid_from date is after version 1 valid_from date.
